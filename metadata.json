@@ -1,0 +1,6 @@
+{
+  "name": "Research & Academic Project Tracking System 2570 (Realtime)",
+  "description": "ระบบกำกับติดตามโครงการวิจัยและบริการวิชาการ ปีงบประมาณ 2570 วพบ.ตรัง พร้อมระบบบันทึกและซิงค์ข้อมูล Real-time อัตโนมัติ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบกำกับติดตามโครงการวิจัยและบริการวิชาการ ปีงบประมาณ 2570 (รวมกิจกรรมย่อย & Real-time)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <!-- Google Font: Sarabun -->
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Sarabun', sans-serif; }
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800" x-data="projectTracker()" x-init="initData()">
+
+  <!-- Realtime Toast -->
+  <div x-show="toastMessage" x-cloak class="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 border border-slate-700 animate-bounce">
+    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+    <span x-text="toastMessage"></span>
+  </div>
+
+  <!-- Top Navbar -->
+  <header class="bg-indigo-950 text-white sticky top-0 z-40 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
+      <div>
+        <h1 class="text-base sm:text-lg font-bold flex items-center gap-2">
+          <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Research & Academic Project Tracking System
+          <span class="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-normal">ปี 2570</span>
+        </h1>
+        <p class="text-xs text-indigo-200">กลุ่มงานวิจัย นวัตกรรม และบริการวิชาการ วิทยาลัยพยาบาลบรมราชชนนี ตรัง</p>
+      </div>
+
+      <!-- Action & Realtime Badge -->
+      <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs bg-emerald-950/70 border border-emerald-500/40 text-emerald-200">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>Real-time เปิดใช้งาน</span>
+          <span class="text-[10px] text-emerald-300" x-text="lastSavedText"></span>
+        </div>
+
+        <button @click="resetToDefaultData()" class="text-xs bg-indigo-900 hover:bg-indigo-800 text-indigo-200 hover:text-white px-2.5 py-1.5 rounded-lg border border-indigo-800 transition">
+          รีเซ็ตข้อมูล
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- KPI Summary Cards -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-xs text-slate-500 font-medium">โครงการหลัก</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1" x-text="projects.length + ' โครงการ'"></p>
+        <p class="text-[11px] text-indigo-600 mt-1" x-text="'รวม ' + totalSubActivitiesCount + ' กิจกรรมย่อย'"></p>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
+        <p class="text-xs text-slate-500 font-medium">งบประมาณรวมทั้งสิ้น</p>
+        <p class="text-xl font-bold text-emerald-600 mt-1" x-text="formatNumber(totalBudget) + ' ฿'"></p>
+        <p class="text-[11px] text-slate-400 mt-1">งบกิจกรรมทั้งหมด</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-amber-500">
+        <p class="text-xs text-slate-500 font-medium">รอส่งแผน/การเงิน/อนุมัติ</p>
+        <p class="text-2xl font-bold text-amber-600 mt-1" x-text="pendingCount"></p>
+        <p class="text-[11px] text-slate-400 mt-1">ขั้นตอนที่ 1-3</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-rose-500">
+        <p class="text-xs text-slate-500 font-medium">เตือนวิกฤต / เร่งด่วน</p>
+        <p class="text-2xl font-bold text-rose-600 mt-1" x-text="criticalCount"></p>
+        <p class="text-[11px] text-rose-400 mt-1">กิจกรรมใกล้เดดไลน์</p>
+      </div>
+    </section>
+
+    <!-- Toolbar: Search & Expand/Collapse -->
+    <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-3 items-center justify-between">
+      <input type="text" x-model="searchQuery" placeholder="ค้นหาชื่อโครงการ, กิจกรรม, ผู้รับผิดชอบ..." class="px-3 py-2 border rounded-lg text-sm w-full sm:w-80 focus:ring-2 focus:ring-indigo-500 outline-none">
+      
+      <div class="flex items-center gap-2 text-xs">
+        <button @click="expandAll()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded font-medium">ขยายกิจกรรมทั้งหมด</button>
+        <button @click="collapseAll()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded font-medium">ยุบกิจกรรมทั้งหมด</button>
+      </div>
+    </section>
+
+    <!-- Project List with Nested Activities -->
+    <div class="space-y-4">
+      <template x-for="p in filteredProjects" :key="p.id">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          
+          <!-- Parent Project Header -->
+          <div class="p-4 bg-slate-50/80 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-start gap-3 flex-1">
+              <button @click="toggleExpand(p.id)" class="mt-1 p-1 hover:bg-slate-200 rounded text-slate-500">
+                <svg x-show="isExpanded(p.id)" class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                <svg x-show="!isExpanded(p.id)" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              </button>
+              
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-mono font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded" x-text="p.code"></span>
+                  <span class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full" x-text="p.activities.length + ' กิจกรรมย่อย'"></span>
+                </div>
+                <h2 @click="toggleExpand(p.id)" class="text-base font-bold text-slate-900 cursor-pointer hover:text-indigo-600" x-text="p.title"></h2>
+                <div class="flex flex-wrap items-center gap-x-4 text-xs text-slate-500">
+                  <span>ผู้รับผิดชอบหลัก: <strong class="text-slate-700" x-text="p.owner || '-'"></strong></span>
+                  <span>งบประมาณรวม: <strong class="text-emerald-600" x-text="formatNumber(getProjectTotalBudget(p)) + ' บาท'"></strong></span>
+                  <span>กรอบเวลา: <span x-text="p.timeline"></span></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions on Main Project -->
+            <div class="flex items-center gap-2">
+              <button @click="openEditProjectModal(p)" class="px-3 py-1.5 text-xs bg-white hover:bg-slate-100 text-indigo-700 font-medium rounded-lg border border-indigo-200 transition">
+                แก้ไขรายละเอียดโครงการ
+              </button>
+              <button @click="openAddActivityModal(p)" class="px-3 py-1.5 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium rounded-lg border border-emerald-300 transition">
+                + เพิ่มกิจกรรมย่อย
+              </button>
+            </div>
+          </div>
+
+          <!-- Nested Sub-activities Table -->
+          <div x-show="isExpanded(p.id)" class="overflow-x-auto">
+            <table class="w-full text-left text-xs sm:text-sm text-slate-600">
+              <thead class="bg-slate-100/60 text-slate-700 text-xs uppercase font-semibold border-b">
+                <tr>
+                  <th class="py-2.5 px-3 w-10 text-center">#</th>
+                  <th class="py-2.5 px-4 min-w-[260px]">ชื่อกิจกรรมย่อย</th>
+                  <th class="py-2.5 px-3 min-w-[140px]">ผู้รับผิดชอบกิจกรรม</th>
+                  <th class="py-2.5 px-3 text-right min-w-[90px]">งบประมาณ</th>
+                  <th class="py-2.5 px-3 min-w-[130px]">กำหนดวันจัด</th>
+                  <th class="py-2.5 px-4 min-w-[220px]">ขั้นตอนกำกับติดตาม</th>
+                  <th class="py-2.5 px-3 min-w-[150px]">การแจ้งเตือน</th>
+                  <th class="py-2.5 px-3 text-center w-20">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <template x-for="(act, aIdx) in p.activities" :key="act.id">
+                  <tr class="hover:bg-slate-50 transition" :class="{'bg-rose-50/40': act.alertType === 'danger', 'bg-amber-50/30': act.alertType === 'warning'}">
+                    <td class="py-2 px-3 text-center font-mono text-xs text-slate-400" x-text="aIdx + 1"></td>
+                    <td class="py-2 px-4 font-medium text-slate-900" x-text="act.title"></td>
+                    <td class="py-2 px-3 text-xs text-slate-600 whitespace-pre-line" x-text="act.owner || '-'"></td>
+                    <td class="py-2 px-3 text-right font-medium text-slate-800" x-text="act.budget > 0 ? formatNumber(act.budget) + ' ฿' : '-'"></td>
+                    <td class="py-2 px-3 text-xs" x-text="act.timeline"></td>
+                    
+                    <!-- Stepper -->
+                    <td class="py-2 px-4">
+                      <div class="flex items-center justify-between text-xs">
+                        <span class="font-semibold px-2 py-0.5 rounded-full" :class="getStageBadgeColor(act.currentStage)" x-text="`ขั้นที่ ${act.currentStage}: ${stages[act.currentStage-1]}`"></span>
+                        <div class="flex gap-1 text-[10px]">
+                          <button @click="quickStep(p, act, -1)" :disabled="act.currentStage <= 1" class="w-4 h-4 bg-slate-200 rounded font-bold disabled:opacity-30">-</button>
+                          <button @click="quickStep(p, act, 1)" :disabled="act.currentStage >= 8" class="w-4 h-4 bg-indigo-100 text-indigo-700 rounded font-bold disabled:opacity-30">+</button>
+                        </div>
+                      </div>
+                      <div class="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                        <div class="bg-indigo-600 h-full rounded-full transition-all" :style="`width: ${(act.currentStage / 8) * 100}%`"></div>
+                      </div>
+                    </td>
+
+                    <td class="py-2 px-3 text-xs">
+                      <span x-show="act.alertType === 'danger'" class="text-rose-700 font-semibold" x-text="'🚨 ' + act.alertText"></span>
+                      <span x-show="act.alertType === 'warning'" class="text-amber-700 font-semibold" x-text="'⚠️ ' + act.alertText"></span>
+                      <span x-show="act.alertType === 'normal'" class="text-emerald-700 font-medium">✓ ปกติ</span>
+                    </td>
+
+                    <td class="py-2 px-3 text-center">
+                      <button @click="openEditActivityModal(p, act)" class="px-2 py-1 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded border border-indigo-200">
+                        แก้ไข
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
+
+  </main>
+
+  <!-- MODAL: Edit Project Details -->
+  <div x-show="showEditProjectModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-base text-slate-800">แก้ไขรายละเอียดโครงการหลัก</h3>
+        <button @click="showEditProjectModal = false" class="text-slate-400 text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="space-y-3 text-xs sm:text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">รหัสโครงการ</label>
+            <input type="text" x-model="activeProject.code" class="w-full p-2 border rounded-lg text-xs font-mono font-bold">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">ผู้รับผิดชอบหลัก</label>
+            <input type="text" x-model="activeProject.owner" class="w-full p-2 border rounded-lg text-xs">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อโครงการหลัก *</label>
+          <textarea rows="2" x-model="activeProject.title" class="w-full p-2 border rounded-lg text-xs font-medium"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">วัตถุประสงค์ / รายละเอียด</label>
+          <textarea rows="2" x-model="activeProject.description" class="w-full p-2 border rounded-lg text-xs"></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">งบประมาณโครงการ</label>
+            <input type="number" x-model.number="activeProject.budget" class="w-full p-2 border rounded-lg text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">กรอบเวลา</label>
+            <input type="text" x-model="activeProject.timeline" class="w-full p-2 border rounded-lg text-xs">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t">
+        <button @click="showEditProjectModal = false" class="px-4 py-2 text-xs border rounded-lg">ยกเลิก</button>
+        <button @click="saveProjectDetails()" class="px-4 py-2 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">บันทึกโครงการ (Real-time)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Edit Sub-activity -->
+  <div x-show="showEditActivityModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-base text-slate-800">แก้ไขกิจกรรมย่อย</h3>
+        <button @click="showEditActivityModal = false" class="text-slate-400 text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="space-y-3 text-xs sm:text-sm" x-show="activeActivity">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อกิจกรรมย่อย *</label>
+          <input type="text" x-model="activeActivity.title" class="w-full p-2 border rounded-lg text-xs font-medium">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">ผู้รับผิดชอบ</label>
+            <input type="text" x-model="activeActivity.owner" class="w-full p-2 border rounded-lg text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">งบประมาณ (บาท)</label>
+            <input type="number" x-model.number="activeActivity.budget" class="w-full p-2 border rounded-lg text-xs">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">กำหนดวันจัด</label>
+            <input type="text" x-model="activeActivity.timeline" class="w-full p-2 border rounded-lg text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">ขั้นตอน (1 - 8)</label>
+            <select x-model.number="activeActivity.currentStage" class="w-full p-2 border rounded-lg text-xs bg-white">
+              <template x-for="(st, idx) in stages" :key="idx">
+                <option :value="idx + 1" x-text="`${idx+1}. ${st}`"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">สถานะแจ้งเตือน</label>
+            <select x-model="activeActivity.alertType" class="w-full p-2 border rounded-lg text-xs bg-white">
+              <option value="normal">✓ ปกติ (ตามแผน)</option>
+              <option value="warning">⚠️ เตือน: ใกล้ถึงกำหนด</option>
+              <option value="danger">🚨 วิกฤต: ต้องเร่งดำเนินการ</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">ข้อความแจ้งเตือน</label>
+            <input type="text" x-model="activeActivity.alertText" class="w-full p-2 border rounded-lg text-xs">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t">
+        <button @click="showEditActivityModal = false" class="px-4 py-2 text-xs border rounded-lg">ยกเลิก</button>
+        <button @click="saveActivityDetails()" class="px-4 py-2 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">บันทึกกิจกรรม (Real-time)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Logic with Nested Activities & Real-time Sync -->
+  <script>
+    function projectTracker() {
+      return {
+        searchQuery: '',
+        showEditProjectModal: false,
+        showEditActivityModal: false,
+        activeProject: {},
+        activeActivity: {},
+        activeParentProjectId: null,
+        expandedState: {},
+        toastMessage: '',
+        lastSavedText: '',
+        channel: null,
+        stages: [
+          'ส่งงานแผน',
+          'ส่งงานการเงิน',
+          'เสนออนุมัติจาก ผอ.',
+          'ส่งจัดซื้อจัดจ้าง',
+          'บันทึกขอจัด/ยืมเงิน',
+          'ดำเนินการจัดโครงการ',
+          'การสรุปโครงการ',
+          'ส่งเบิกเงิน/เคลียร์เงิน'
+        ],
+
+        defaultProjects: [
+          {
+            id: 1,
+            code: 'Fon-Res-S17',
+            title: 'โครงการบริการสุขภาพเพื่อตอบสนองความต้องการด้านสุขภาพของประชาชนกลุ่มเป้าหมาย (สบช. โมเดล)',
+            description: 'โครงการบริการสุขภาพตามยุทธศาสตร์ สบช. โมเดล',
+            owner: 'นางสาวเบญจวรรณ จันทรซิว',
+            budget: 58460,
+            timeline: '1 ต.ค. 69 - 30 ก.ย. 70',
+            activities: [
+              { id: 101, title: 'กิจกรรมที่ 1 การสร้างชุมชนสุขภาวะด้วย สบช.โมเดลในรั้วบ้าน-วัด-โรงเรียน', budget: 40050, owner: 'นางไพจิตร พุทธรอด', timeline: '23-24 ต.ค. 69', currentStage: 4, alertType: 'danger', alertText: 'ไตรมาส 1: เร่งขออนุมัติและยืมเงินโครงการ' },
+              { id: 102, title: 'กิจกรรมที่ 2 การสร้างบุคลากรสุขภาพดีด้วยสบช. โมเดล', budget: 4000, owner: 'นางสาวเพ็ญนภา เพ็ชรเล็ก', timeline: '22 ต.ค. 69', currentStage: 4, alertType: 'danger', alertText: 'ไตรมาส 1: เร่งส่งจัดซื้อจัดจ้าง/ยืมเงิน' },
+              { id: 103, title: 'กิจกรรมที่ 3 บริการวิชาการสู่ชุมชนในภารกิจจังหวัด', budget: 8810, owner: 'ผศ.วรารัตน์ ทิพย์รัตน์', timeline: '1 ต.ค. 69 - 30 ก.ย. 70', currentStage: 3, alertType: 'normal', alertText: 'ดำเนินงานตลอดปีงบประมาณ' },
+              { id: 104, title: 'กิจกรรมที่ 4 ศูนย์ความเป็นเลิศ', budget: 5600, owner: 'นางนิตยา ชีพประสพ', timeline: 'ตามแผนงาน', currentStage: 1, alertType: 'normal', alertText: 'ตามแผนงาน' }
+            ]
+          },
+          {
+            id: 2,
+            code: 'Fon-Res-S16',
+            title: 'โครงการบริการวิชาการเชิงรุกสู่การจัดการสุขภาพวะชุมชนอย่างยั่งยืน',
+            description: 'สร้างเสริมความเข้มแข็งของชุมชนผ่านกลไกความร่วมมือ',
+            owner: 'นางสาวเบญจวรรณ จันทรซิว',
+            budget: 37750,
+            timeline: '19 พ.ย. 69 - 23 ม.ค. 70',
+            activities: [
+              { id: 201, title: 'กิจกรรมที่ 1 สร้างเครือข่ายความร่วมมือ', budget: 4750, owner: 'ผศ.วรารัตน์ ทิพย์รัตน์', timeline: '19-21 พ.ย. 69', currentStage: 3, alertType: 'warning', alertText: 'เตือน: เตรียมส่งจัดซื้อจัดจ้างล่วงหน้า 15 วัน' },
+              { id: 202, title: 'กิจกรรมที่ 2 ชุมชนไทยไร้ NCDs โดยความร่วมมือภาคีเครือข่ายในชุมชน', budget: 33000, owner: 'นางนิตยา ชีพประสพ', timeline: '19-23 ม.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'กำหนดจัดช่วงไตรมาส 2' }
+            ]
+          },
+          {
+            id: 3,
+            code: 'Fon-Res-S21.1',
+            title: 'โครงการพัฒนานวัตกรรมทางสุขภาพ และนักวิจัยมือใหม่ทางการพยาบาล',
+            description: 'โครงการพัฒนานวัตกรรมและสร้างนักวิจัยมือใหม่ทางการพยาบาล',
+            owner: 'ผศ.ไพจิตร พุทธรอด / ผศ.ศศิธร คำพันธ์',
+            budget: 320000,
+            timeline: '14 พ.ย. - 27 ธ.ค. 69',
+            activities: [
+              { id: 301, title: 'กิจกรรมที่ 1 โครงการพัฒนานวัตกรรมทางสุขภาพ', budget: 70000, owner: 'ผศ.ไพจิตร พุทธรอด', timeline: '14-22 พ.ย. 69', currentStage: 3, alertType: 'warning', alertText: 'รอเสนอ ผอ. อนุมัติจัดโครงการ' },
+              { id: 302, title: 'กิจกรรมที่ 2 โครงการ “นักวิจัยมือใหม่ทางการพยาบาล” ประจำปีงบประมาณ 2570 (ขอหน่วย CNEU)', budget: 250000, owner: 'ผศ.ศศิธร คำพันธ์ / นส.ทิพย์วรรณ บุณยาภรณ์', timeline: '11-27 ธ.ค. 69', currentStage: 2, alertType: 'warning', alertText: 'งานการเงินตรวจงบ และยื่นขอหน่วย CNEU' }
+            ]
+          },
+          {
+            id: 4,
+            code: 'Fon-Res-S21.2',
+            title: 'โครงการพัฒนาพฤติกรรมบริการสู่มาตรฐานมืออาชีพ (PN เวรเปล)',
+            description: 'พัฒนามาตรฐานการให้บริการและการสื่อสารเชิงบวก',
+            owner: 'นางสาวเบญจวรรณ จันทรซิว',
+            budget: 150000,
+            timeline: '11-12 ม.ค., 15-16 ก.พ. 70',
+            activities: [
+              { id: 401, title: 'กิจกรรมที่ 1 อบรมพัฒนาทักษะพฤติกรรมบริการ รุ่นที่ 1', budget: 75000, owner: 'นางสาวเบญจวรรณ จันทรซิว', timeline: '11-12 ม.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'เตรียมจัดทำรายละเอียดโครงการ' },
+              { id: 402, title: 'กิจกรรมที่ 2 อบรมพัฒนาทักษะพฤติกรรมบริการ รุ่นที่ 2', budget: 75000, owner: 'นางสาวเบญจวรรณ จันทรซิว', timeline: '15-16 ก.พ. 70', currentStage: 1, alertType: 'normal', alertText: 'เตรียมจัดทำรายละเอียดโครงการ' }
+            ]
+          },
+          {
+            id: 5,
+            code: 'Fon-Res-S21.3',
+            title: 'โครงการพัฒนาศักยภาพการทำงานยุคใหม่ด้วย AI (การทำงาน/วิจัย)',
+            description: 'เสริมสร้างทักษะการประยุกต์ใช้ AI ในการทำงาน',
+            owner: 'ผศ.ศศิธร คำพันธ์ / นส.ทิพย์วรรณ บุณยาภรณ์',
+            budget: 250000,
+            timeline: '14-15 ม.ค., 25-26 พ.ค. 70',
+            activities: [
+              { id: 501, title: 'กิจกรรมที่ 1 การใช้ AI เพื่อเพิ่มประสิทธิภาพการทำงานและงานสารสนเทศ', budget: 125000, owner: 'ผศ.ศศิธร คำพันธ์', timeline: '14-15 ม.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'เตรียมหลักสูตรและวิทยากร' },
+              { id: 502, title: 'กิจกรรมที่ 2 การใช้ AI สำหรับระเบียบวิธีวิจัยและการวิเคราะห์ข้อมูล', budget: 125000, owner: 'นส.ทิพย์วรรณ บุณยาภรณ์', timeline: '25-26 พ.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'เตรียมหลักสูตรและวิทยากร' }
+            ]
+          },
+          {
+            id: 6,
+            code: 'Fon-Res-S21.4',
+            title: 'โครงการอบรมหลักสูตรการพยาบาลเฉพาะทาง สาขาการพยาบาลเวชปฏิบัติทั่วไป รุ่น 3',
+            description: 'หลักสูตรเฉพาะทาง 4 เดือน',
+            owner: 'นางนิตยา ชีพประสพ / ผศ.นันทยา เสนีย์',
+            budget: 1350000,
+            timeline: '5 ก.พ. - 16 ก.ค. 70',
+            activities: [
+              { id: 601, title: 'กิจกรรมที่ 1 ภาคทฤษฎีและการอบรมเชิงปฏิบัติการ', budget: 800000, owner: 'นางนิตยา ชีพประสพ', timeline: '5 ก.พ. - 30 เม.ย. 70', currentStage: 1, alertType: 'normal', alertText: 'เปิดรับสมัครและส่งแผน' },
+              { id: 602, title: 'กิจกรรมที่ 2 ภาคปฏิบัติการพยาบาลเวชปฏิบัติในแหล่งฝึก', budget: 550000, owner: 'ผศ.นันทยา เสนีย์', timeline: '1 พ.ค. - 16 ก.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'เตรียมประสานงานแหล่งฝึกคลินิก' }
+            ]
+          },
+          {
+            id: 7,
+            code: 'Fon-Res-S21.5',
+            title: 'กิจกรรม 7 อบรมเฉพาะทาง สาขาการพยาบาลเวชปฏิบัติฉุกเฉิน รุ่น 13',
+            description: 'หลักสูตรเฉพาะทางฉุกเฉิน',
+            owner: 'ผศ.วรารัตน์ ทิพย์รัตน์ / นายจิรานุวัฒน์ ชาญสูงเนิน',
+            budget: 1950000,
+            timeline: '11 ม.ค. - 14 พ.ค. 70',
+            activities: [
+              { id: 701, title: 'กิจกรรมที่ 1 การจัดการเรียนการสอนภาคทฤษฎีและสถานการณ์จำลอง', budget: 1150000, owner: 'ผศ.วรารัตน์ ทิพย์รัตน์', timeline: '11 ม.ค. - 15 มี.ค. 70', currentStage: 2, alertType: 'normal', alertText: 'ตรวจสอบกรอบงบประมาณรายได้' },
+              { id: 702, title: 'กิจกรรมที่ 2 การฝึกภาคปฏิบัติการพยาบาลฉุกเฉิน ณ ห้องฉุกเฉินและ EMS', budget: 800000, owner: 'นายจิรานุวัฒน์ ชาญสูงเนิน', timeline: '16 มี.ค. - 14 พ.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'แผนงานไตรมาส 2-3' }
+            ]
+          },
+          {
+            id: 8,
+            code: 'Fon-Res-S21.6',
+            title: 'กิจกรรม 8 อบรมผู้บริหารการสาธารณสุขระดับกลาง รุ่น 40',
+            description: 'หลักสูตรผบก. รุ่น 40',
+            owner: 'นางชุติกาญจน์ แซ่ตั้น / ผศ.ศศิธร คำพันธ์',
+            budget: 1850000,
+            timeline: '31 พ.ค. - 18 มิ.ย. 70',
+            activities: [
+              { id: 801, title: 'กิจกรรมที่ 1 การสัมมนาเชิงปฏิบัติการและการพัฒนาภาวะผู้นำ', budget: 1100000, owner: 'นางชุติกาญจน์ แซ่ตั้น', timeline: '31 พ.ค. - 10 มิ.ย. 70', currentStage: 1, alertType: 'normal', alertText: 'เตรียมส่งงานแผน' },
+              { id: 802, title: 'กิจกรรมที่ 2 การศึกษาดูงานและการจัดทำแผนยุทธศาสตร์สุขภาพ', budget: 750000, owner: 'ผศ.ศศิธร คำพันธ์', timeline: '11-18 มิ.ย. 70', currentStage: 1, alertType: 'normal', alertText: 'เตรียมส่งงานแผน' }
+            ]
+          },
+          {
+            id: 9,
+            code: 'Fon-Res-S21.7',
+            title: 'กิจกรรม 9 อบรมผู้บริหารการสาธารณสุขระดับต้น รุ่น 36',
+            description: 'หลักสูตรผบต. รุ่น 36',
+            owner: 'นส.อิงหทัย ดำจุติ / ผศ.ศศิธร คำพันธ์',
+            budget: 1080000,
+            timeline: '28 มิ.ย. - 23 ก.ค. 70',
+            activities: [
+              { id: 901, title: 'กิจกรรมที่ 1 การอบรมทักษะการบริหารงานและการสื่อสาร', budget: 650000, owner: 'นส.อิงหทัย ดำจุติ', timeline: '28 มิ.ย. - 10 ก.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'เตรียมส่งงานแผน' },
+              { id: 902, title: 'กิจกรรมที่ 2 การนำเสนอโครงงานการพัฒนางานสาธารณสุข', budget: 430000, owner: 'ผศ.ศศิธร คำพันธ์', timeline: '11-23 ก.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'เตรียมส่งงานแผน' }
+            ]
+          },
+          {
+            id: 10,
+            code: 'Fon-Res-S32',
+            title: 'โครงการพัฒนาเครือข่ายความร่วมมือทางวิชาการกับต่างประเทศ (วิเทศสัมพันธ์)',
+            description: 'งานวิเทศสัมพันธ์และความร่วมมือระหว่างประเทศ',
+            owner: 'นางสาวทิพย์วรรณ บุณยาภรณ์ / นางรุ่งฤดี อุสาหะ',
+            budget: 144830,
+            timeline: '22 พ.ย. 69 - 10 ส.ค. 70',
+            activities: [
+              { id: 1001, title: 'กิจกรรมที่ 1.1 การสร้างเครือข่ายความร่วมมือผู้บริหาร ระยะ 1', budget: 0, owner: 'คณะทำงาน', timeline: '4-6 มิ.ย. 70', currentStage: 1, alertType: 'normal', alertText: 'แผนงานไตรมาส 3' },
+              { id: 1002, title: 'กิจกรรมที่ 1.2 การสร้างเครือข่ายความร่วมมือผู้บริหาร ระยะ 2', budget: 0, owner: 'คณะทำงาน', timeline: '4-6 มี.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'แผนงานไตรมาส 2' },
+              { id: 1003, title: 'กิจกรรมที่ 2.4 การรับอาคันตุกะอาจารย์และนักศึกษาแลกเปลี่ยน', budget: 58490, owner: 'คณะทำงาน', timeline: '22-29 พ.ย. 69', currentStage: 4, alertType: 'warning', alertText: 'เตือน: เร่งประสานงานที่พัก ยานพาหนะ และจัดซื้อจัดจ้าง' },
+              { id: 1004, title: 'กิจกรรมที่ 2.5 การเตรียมความพร้อมอาจารย์และนักศึกษาแลกเปลี่ยน ระยะ 1', budget: 20500, owner: 'คณะทำงาน', timeline: '26 พ.ค., 2, 10 ส.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'แผนงานไตรมาส 3-4' },
+              { id: 1005, title: 'กิจกรรมที่ 2.6 การเตรียมความพร้อมอาจารย์และนักศึกษาแลกเปลี่ยน ระยะ 2', budget: 29840, owner: 'คณะทำงาน', timeline: '7-9 มิ.ย. 70', currentStage: 1, alertType: 'normal', alertText: 'แผนงานไตรมาส 3' }
+            ]
+          },
+          {
+            id: 11,
+            code: 'Fon-Res-S14',
+            title: 'โครงการพัฒนาระบบนิเวศและระบบบริหารจัดการงานวิจัยเพื่อสร้างแรงจูงใจและผลักดันฯ',
+            description: 'ระบบสนับสนุนและทุนวิจัย',
+            owner: 'นางสาวทิพย์วรรณ บุณยาภรณ์',
+            budget: 212720,
+            timeline: '28 ต.ค. 69 - 31 ส.ค. 70',
+            activities: [
+              { id: 1101, title: 'กิจกรรมที่ 1 จัดสรรทุนวิจัย/สนับสนุนตีพิมพ์/บทความ หนังสือ ตำรา', budget: 200000, owner: 'คณะทำงาน', timeline: '3 พ.ย. 69 - 31 ส.ค. 70', currentStage: 3, alertType: 'warning', alertText: 'เตรียมประกาศเปิดรับข้อเสนอทุนวิจัย' },
+              { id: 1102, title: 'กิจกรรมที่ 2 ทบทวนระบบการดำเนินงานวิจัย', budget: 7350, owner: 'คณะทำงาน', timeline: '28 ต.ค. 69', currentStage: 5, alertType: 'danger', alertText: 'ด่วนมาก: กิจกรรม 28 ต.ค. ต้องเร่งขออนุมัติและยืมเงิน' },
+              { id: 1103, title: 'กิจกรรมที่ 3 พัฒนาศักยภาพคณะกรรมการจริยธรรม', budget: 5370, owner: 'คณะทำงาน', timeline: '19 มี.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'แผนงานไตรมาส 2' }
+            ]
+          },
+          {
+            id: 12,
+            code: 'Fon-Res-S18',
+            title: 'โครงการสนับสนุนการนำเสนอและตีพิมพ์ผลงานวิจัยระดับนานาชาติ: Research Forward',
+            description: 'ผลักดันการเผยแพร่ผลงานวิจัยในฐานข้อมูลสากล Scopus',
+            owner: 'นางสาวทิพย์วรรณ บุณยาภรณ์',
+            budget: 123280,
+            timeline: '10 พ.ย. 69 - 3 มิ.ย. 70',
+            activities: [
+              { id: 1201, title: 'กิจกรรมที่ 1 ทบทวนความรู้ความเข้าใจในการออกแบบงานวิจัยที่มีคุณภาพสูง', budget: 7340, owner: 'คณะทำงาน', timeline: '11 พ.ย. 69, 28 พ.ค. 70', currentStage: 3, alertType: 'warning', alertText: 'เตรียมจัดงวดแรก 11 พ.ย. 69' },
+              { id: 1202, title: 'กิจกรรมที่ 2 จัดค่ายวิจัยแบบมุ่งเป้าและ proposal bank', budget: 48600, owner: 'คณะทำงาน', timeline: '29 พ.ค. 70', currentStage: 1, alertType: 'normal', alertText: 'แผนงานไตรมาส 3' },
+              { id: 1203, title: 'กิจกรรมที่ 3 สนับสนุนและอำนวยความสะดวกการยื่นขอรับรองจริยธรรมในมนุษย์', budget: 0, owner: 'คณะทำงาน', timeline: '11 พ.ย. 69, 29 พ.ค. 70', currentStage: 2, alertType: 'normal', alertText: 'พัฒนาระบบสนับสนุนการยื่น IRB' },
+              { id: 1204, title: 'กิจกรรมที่ 4 จัดทำต้นฉบับเพื่อตีพิมพ์ Scopus และอำนวยความสะดวกเผยแพร่', budget: 67340, owner: 'คณะทำงาน', timeline: '10 พ.ย. 69, 1-3 มิ.ย. 70', currentStage: 3, alertType: 'warning', alertText: 'รอบแรกเริ่ม 10 พ.ย. 69 เร่งส่งเรื่อง' }
+            ]
+          },
+          {
+            id: 13,
+            code: 'Fon-Res-S19',
+            title: 'โครงการยกระดับการบริหารจัดการการจดทรัพย์สินทางปัญญา ผลงานวิจัยสู่การใช้ประโยชน์',
+            description: 'คุ้มครองทรัพย์สินทางปัญญาและประเมินผลตอบแทนทางสังคม (SROI)',
+            owner: 'นางสาวทิพย์วรรณ บุณยาภรณ์',
+            budget: 168420,
+            timeline: '28 ต.ค. 69 - 26 มิ.ย. 70',
+            activities: [
+              { id: 1301, title: 'กิจกรรมที่ 1 ส่งเสริมการใช้ประโยชน์ผลงานวิจัยและการประเมิน SROI', budget: 0, owner: 'คณะทำงาน', timeline: '2 มิ.ย. 70', currentStage: 1, alertType: 'normal', alertText: 'แผนงานไตรมาส 3' },
+              { id: 1302, title: 'กิจกรรมที่ 2 ส่งเสริมศักยภาพอาจารย์สร้างสรรค์ผลงานวิชาการ/นวัตกรรมปฐมภูมิ', budget: 3570, owner: 'คณะทำงาน', timeline: '28 ต.ค. 69, 2-4 มิ.ย. 70', currentStage: 5, alertType: 'danger', alertText: 'ด่วน: รอบแรก 28 ต.ค. เร่งยืมเงินและขอจัด' },
+              { id: 1303, title: 'กิจกรรมที่ 3 การจดทรัพย์สินทางปัญญา', budget: 164850, owner: 'คณะทำงาน', timeline: 'ตามแผนงาน', currentStage: 1, alertType: 'normal', alertText: 'ตั้งเบิกค่าธรรมเนียมและคำขอจดทะเบียน' }
+            ]
+          },
+          {
+            id: 14,
+            code: 'Fon-Res-S20',
+            title: 'โครงการอบรมนวัตกรรมทางการพยาบาล (รอเพิ่มแผน)',
+            description: 'โครงการพัฒนานวัตกรรมการบริการพยาบาล',
+            owner: 'กลุ่มงานวิจัย',
+            budget: 0,
+            timeline: 'รออนุมัติแผน',
+            activities: [
+              { id: 1401, title: 'กิจกรรมร่างข้อเสนอโครงการและประสานงานวิทยากร', budget: 0, owner: 'กลุ่มงานวิจัย', timeline: 'รออนุมัติแผน', currentStage: 1, alertType: 'normal', alertText: 'อยู่ระหว่างร่างโครงการ' }
+            ]
+          }
+        ],
+
+        projects: [],
+
+        initData() {
+          const saved = localStorage.getItem('research_dashboard_data_70_grouped_v3');
+          if (saved) {
+            try { this.projects = JSON.parse(saved); } catch(e) { this.projects = JSON.parse(JSON.stringify(this.defaultProjects)); }
+          } else {
+            this.projects = JSON.parse(JSON.stringify(this.defaultProjects));
+          }
+          this.updateTime();
+
+          if (window.BroadcastChannel) {
+            this.channel = new BroadcastChannel('research_realtime_sync_v3');
+            this.channel.onmessage = (event) => {
+              if (event.data && event.data.projects) {
+                this.projects = event.data.projects;
+                this.showToast('ข้อมูลอัปเดตแบบ Real-time จากอีกแท็บแล้ว');
+                this.updateTime();
+              }
+            };
+          }
+        },
+
+        broadcastUpdate() {
+          localStorage.setItem('research_dashboard_data_70_grouped_v3', JSON.stringify(this.projects));
+          if (this.channel) {
+            this.channel.postMessage({ projects: this.projects, time: Date.now() });
+          }
+          this.updateTime();
+          this.showToast('บันทึกและซิงค์ Real-time เรียบร้อย');
+        },
+
+        updateTime() {
+          this.lastSavedText = 'บันทึก: ' + new Date().toLocaleTimeString('th-TH');
+        },
+
+        showToast(msg) {
+          this.toastMessage = msg;
+          setTimeout(() => { if (this.toastMessage === msg) this.toastMessage = ''; }, 3000);
+        },
+
+        isExpanded(id) {
+          return this.expandedState[id] !== false;
+        },
+
+        toggleExpand(id) {
+          this.expandedState[id] = this.expandedState[id] === false ? true : false;
+        },
+
+        expandAll() {
+          this.projects.forEach(p => this.expandedState[p.id] = true);
+        },
+
+        collapseAll() {
+          this.projects.forEach(p => this.expandedState[p.id] = false);
+        },
+
+        getProjectTotalBudget(p) {
+          return p.activities.reduce((sum, a) => sum + (Number(a.budget) || 0), 0) || p.budget;
+        },
+
+        get totalSubActivitiesCount() {
+          return this.projects.reduce((sum, p) => sum + p.activities.length, 0);
+        },
+
+        get totalBudget() {
+          let total = 0;
+          this.projects.forEach(p => {
+            p.activities.forEach(a => total += (Number(a.budget) || 0));
+          });
+          return total;
+        },
+
+        get criticalCount() {
+          let count = 0;
+          this.projects.forEach(p => {
+            count += p.activities.filter(a => a.alertType === 'danger').length;
+          });
+          return count;
+        },
+
+        get pendingCount() {
+          let count = 0;
+          this.projects.forEach(p => {
+            count += p.activities.filter(a => a.currentStage >= 1 && a.currentStage <= 3).length;
+          });
+          return count;
+        },
+
+        get filteredProjects() {
+          const q = this.searchQuery.toLowerCase().trim();
+          if (!q) return this.projects;
+          return this.projects.filter(p => {
+            const matchProject = p.title.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || p.owner.toLowerCase().includes(q);
+            const matchAct = p.activities.some(a => a.title.toLowerCase().includes(q) || a.owner.toLowerCase().includes(q));
+            return matchProject || matchAct;
+          });
+        },
+
+        quickStep(project, activity, change) {
+          const next = activity.currentStage + change;
+          if (next >= 1 && next <= 8) {
+            activity.currentStage = next;
+            this.broadcastUpdate();
+          }
+        },
+
+        openEditProjectModal(project) {
+          this.activeProject = JSON.parse(JSON.stringify(project));
+          this.showEditProjectModal = true;
+        },
+
+        saveProjectDetails() {
+          const idx = this.projects.findIndex(p => p.id === this.activeProject.id);
+          if (idx !== -1) {
+            this.projects[idx] = { ...this.projects[idx], ...this.activeProject };
+            this.broadcastUpdate();
+          }
+          this.showEditProjectModal = false;
+        },
+
+        openEditActivityModal(project, activity) {
+          this.activeParentProjectId = project.id;
+          this.activeActivity = JSON.parse(JSON.stringify(activity));
+          this.showEditActivityModal = true;
+        },
+
+        saveActivityDetails() {
+          const p = this.projects.find(x => x.id === this.activeParentProjectId);
+          if (p) {
+            const aIdx = p.activities.findIndex(a => a.id === this.activeActivity.id);
+            if (aIdx !== -1) {
+              p.activities[aIdx] = { ...this.activeActivity };
+              this.broadcastUpdate();
+            }
+          }
+          this.showEditActivityModal = false;
+        },
+
+        openAddActivityModal(project) {
+          const title = prompt('กรุณาระบุชื่อกิจกรรมย่อย:');
+          if (title) {
+            const newAct = {
+              id: Date.now(),
+              title,
+              budget: 0,
+              owner: project.owner,
+              timeline: project.timeline,
+              currentStage: 1,
+              alertType: 'normal',
+              alertText: 'ตามแผนงาน'
+            };
+            project.activities.push(newAct);
+            this.broadcastUpdate();
+          }
+        },
+
+        resetToDefaultData() {
+          if (confirm('ต้องการคืนค่าข้อมูลตั้งต้นโครงการและกิจกรรมย่อยหรือไม่?')) {
+            this.projects = JSON.parse(JSON.stringify(this.defaultProjects));
+            this.broadcastUpdate();
+          }
+        },
+
+        getStageBadgeColor(stage) {
+          if (stage <= 2) return 'bg-slate-100 text-slate-700';
+          if (stage === 3) return 'bg-indigo-100 text-indigo-700';
+          if (stage === 4 || stage === 5) return 'bg-amber-100 text-amber-800';
+          if (stage === 6) return 'bg-blue-100 text-blue-800';
+          if (stage === 7) return 'bg-purple-100 text-purple-800';
+          return 'bg-emerald-100 text-emerald-800';
+        },
+
+        formatNumber(num) {
+          return new Intl.NumberFormat('th-TH').format(num || 0);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
